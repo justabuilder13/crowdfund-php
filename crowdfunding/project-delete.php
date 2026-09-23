@@ -1,30 +1,19 @@
 <?php
 
-require_once 'includes/bootstrap.php';
+require_once 'Classe/Project.php';
 
-$user = requireLogin();
-
+// La suppression se fait seulement avec une requête POST.
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    redirect('projects.php');
+    header('Location: projects.php');
+    exit;
 }
 
-$id = (int) ($_POST['id'] ?? 0);
-$projectModel = new Project();
-$rewardModel = new Reward();
-$project = $projectModel->getProject($id);
+$id = isset($_POST['id']) ? (int) $_POST['id'] : 0;
 
-if (!$project || (int) $project['user_id'] !== (int) $user['id']) {
-    flash('error', 'You cannot delete this project.');
-    redirect('projects.php');
+if ($id > 0) {
+    $projectModel = new Project();
+    $projectModel->deleteProject($id);
 }
 
-deleteUploadedImage($project['image']);
-
-foreach ($rewardModel->getRewardsByProject($id) as $reward) {
-    deleteUploadedImage($reward['image']);
-}
-
-$projectModel->deleteProject($id);
-
-flash('success', 'Project deleted.');
-redirect('profile.php?id=' . $user['id']);
+header('Location: projects.php');
+exit;

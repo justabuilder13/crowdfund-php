@@ -1,123 +1,77 @@
 <?php
 
-require_once 'includes/bootstrap.php';
+require_once 'Classe/User.php';
 
-$current = currentUser();
-$id = isset($_GET['id']) ? (int) $_GET['id'] : (int) ($current['id'] ?? 0);
-
-if ($id <= 0) {
-    flash('error', 'Log in to view your profile.');
-    redirect('login.php');
-}
-
+$userId = (int) ($_GET['id'] ?? 1);
 $userModel = new User();
-(new Project())->refreshExpiredStatuses();
-$profile = $userModel->getUser($id);
+$user = $userModel->getUser($userId);
 
-if (!$profile) {
-    flash('error', 'User not found.');
-    redirect('index.php');
+if (!$user) {
+    header('Location: index.php');
+    exit;
 }
 
-$projects = $userModel->getUserProjects($id);
-$pledges = $userModel->getUserPledges($id);
-$isOwnProfile = $current && (int) $current['id'] === $id;
-$pageTitle = $profile['name'];
+$projects = $userModel->getUserProjects($userId);
 
 require_once 'includes/header.php';
 ?>
 
-<main class="container page-space">
-    <section class="profile-hero">
-        <div class="profile-avatar"><?= e(strtoupper(substr($profile['name'], 0, 1))) ?></div>
-        <div>
-            <p class="eyebrow">Creator profile</p>
-            <h1><?= e($profile['name']) ?></h1>
-            <p>Member since <?= e(date('F Y', strtotime($profile['created_date']))) ?></p>
-        </div>
+<main class="container">
+
+    <section class="profile-header">
+                <h1><?= htmlspecialchars($user['name']) ?></h1>
+        <p><?= htmlspecialchars($user['email']) ?></p>
+        <p class="muted">Member since <?= htmlspecialchars($user['created_date']) ?></p>
     </section>
 
-    <section class="section-block">
+    <section class="profile-projects">
         <div class="section-heading">
-            <div>
-                <p class="eyebrow">Created</p>
-                <h2>Projects</h2>
-            </div>
-            <?php if ($isOwnProfile): ?>
-                <a class="button button-dark" href="project-create.php">Start a project</a>
-            <?php endif; ?>
+            <h2>Projects</h2>
+            <a href="project-create.php">Start a new project</a>
         </div>
 
-        <?php if ($projects): ?>
+        <?php if (count($projects) > 0): ?>
             <div class="projects-grid">
+
                 <?php foreach ($projects as $project): ?>
-                    <?php $percentage = projectPercentage($project); ?>
+
+                    <?php
+                    $percentage = 0;
+
+                    if ($project['goal_amount'] > 0) {
+                        $percentage = ($project['current_amount'] / $project['goal_amount']) * 100;
+                    }
+                    ?>
+
                     <article class="project-card">
-                        <a class="project-image-wrap" href="project.php?id=<?= $project['id'] ?>">
-                            <?php if (!empty($project['image'])): ?>
-                                <img class="project-image" src="<?= e($project['image']) ?>" alt="<?= e($project['title']) ?>">
-                            <?php else: ?>
-                                <div class="project-image project-placeholder">No image yet</div>
-                            <?php endif; ?>
-                        </a>
-                        <div class="project-card-body">
-                            <div class="project-title-row">
-                                <p class="project-category"><?= e($project['category_name']) ?></p>
-                                <span class="status-pill status-<?= e($project['status']) ?>"><?= e(ucfirst($project['status'])) ?></span>
-                            </div>
-                            <h3><a href="project.php?id=<?= $project['id'] ?>"><?= e($project['title']) ?></a></h3>
-                            <progress value="<?= $percentage ?>" max="100"></progress>
-                            <div class="project-card-stats">
-                                <strong>$<?= number_format((float) $project['current_amount'], 0) ?></strong>
-                                <span><?= round($percentage) ?>% funded</span>
-                            </div>
-                            <?php if ($isOwnProfile): ?>
-                                <div class="card-actions">
-                                    <a href="project-edit.php?id=<?= $project['id'] ?>">Edit</a>
-                                    <a href="reward-create.php?project_id=<?= $project['id'] ?>">Add reward</a>
-                                </div>
-                            <?php endif; ?>
+                        <h3><?= htmlspecialchars($project['title']) ?></h3>
+                        <p class="project-description"><?= htmlspecialchars($project['description']) ?></p>
+
+                        <div class="project-funding">
+                            <strong>$<?= number_format($project['current_amount'], 2) ?></strong>
+                            <span>of $<?= number_format($project['goal_amount'], 2) ?> goal</span>
+                        </div>
+
+                        <progress value="<?= min($percentage, 100) ?>" max="100"></progress>
+
+                        <div class="project-actions">
+                            <a href="project.php?id=<?= $project['id'] ?>">View</a>
+                            <a href="project-edit.php?id=<?= $project['id'] ?>">Edit</a>
                         </div>
                     </article>
+
                 <?php endforeach; ?>
+
             </div>
         <?php else: ?>
-            <div class="empty-state"><p>No projects yet.</p></div>
+            <div class="empty-state">
+                <h3>No projects yet</h3>
+                <p>This creator has not created a project yet.</p>
+                <a class="button button-dark" href="project-create.php">Start a project</a>
+            </div>
         <?php endif; ?>
     </section>
 
-    <?php if ($isOwnProfile): ?>
-        <section class="section-block">
-            <div class="section-heading">
-                <div>
-                    <p class="eyebrow">Supported</p>
-                    <h2>Your pledges</h2>
-                </div>
-            </div>
-
-            <?php if ($pledges): ?>
-                <div class="table-wrap">
-                    <table>
-                        <thead>
-                            <tr><th>Project</th><th>Amount</th><th>Status</th><th>Date</th></tr>
-                        </thead>
-                        <tbody>
-                            <?php foreach ($pledges as $pledge): ?>
-                                <tr>
-                                    <td><a href="project.php?id=<?= $pledge['project_id'] ?>"><?= e($pledge['project_title']) ?></a></td>
-                                    <td>$<?= number_format((float) $pledge['amount'], 2) ?></td>
-                                    <td><?= e(ucfirst($pledge['payment_status'])) ?></td>
-                                    <td><?= e(date('M j, Y', strtotime($pledge['created_date']))) ?></td>
-                                </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                </div>
-            <?php else: ?>
-                <div class="empty-state"><p>You have not backed a project yet.</p></div>
-            <?php endif; ?>
-        </section>
-    <?php endif; ?>
 </main>
 
 <?php require_once 'includes/footer.php'; ?>

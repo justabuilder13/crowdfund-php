@@ -1,77 +1,90 @@
 <?php
 
-require_once 'includes/bootstrap.php';
-
-$search = trim($_GET['search'] ?? '');
-$categoryId = isset($_GET['category']) ? (int) $_GET['category'] : 0;
+require_once 'Classe/Project.php';
 
 $projectModel = new Project();
-$categoryModel = new Category();
-$projects = $projectModel->getAllProjects($search, $categoryId);
-$categories = $categoryModel->getAllCategories();
-$pageTitle = 'Discover';
+$projects = $projectModel->getAllProjects();
 
 require_once 'includes/header.php';
 ?>
 
-<main class="container page-space">
+<main class="container">
+
     <section class="projects-header">
         <div>
-            <p class="eyebrow">Discover</p>
-            <h1>Explore projects</h1>
-            <p>Find ideas worth supporting across art, design, technology and more.</p>
+                        <h1>Explore projects</h1>
+            <p>Browse crowdfunding campaigns created by our community.</p>
         </div>
+
         <a class="button button-dark" href="project-create.php">Start a project</a>
     </section>
 
-    <form class="filter-bar" method="get">
-        <input type="search" name="search" value="<?= e($search) ?>" placeholder="Search projects">
-        <select name="category">
-            <option value="0">All categories</option>
-            <?php foreach ($categories as $category): ?>
-                <option value="<?= $category['id'] ?>" <?= $categoryId === (int) $category['id'] ? 'selected' : '' ?>>
-                    <?= e($category['name']) ?>
-                </option>
-            <?php endforeach; ?>
-        </select>
-        <button class="button button-dark" type="submit">Search</button>
-    </form>
+    <?php if (count($projects) > 0): ?>
 
-    <?php if ($projects): ?>
         <section class="projects-grid">
+
             <?php foreach ($projects as $project): ?>
-                <?php $percentage = projectPercentage($project); ?>
+
+                <?php
+                $percentage = 0;
+
+                if ($project['goal_amount'] > 0) {
+                    $percentage = ($project['current_amount'] / $project['goal_amount']) * 100;
+                }
+                ?>
+
                 <article class="project-card">
-                    <a class="project-image-wrap" href="project.php?id=<?= $project['id'] ?>">
-                        <?php if (!empty($project['image'])): ?>
-                            <img class="project-image" src="<?= e($project['image']) ?>" alt="<?= e($project['title']) ?>">
-                        <?php else: ?>
-                            <div class="project-image project-placeholder">No image yet</div>
-                        <?php endif; ?>
-                    </a>
-                    <div class="project-card-body">
-                        <p class="project-category"><?= e($project['category_name']) ?></p>
-                        <h2><a href="project.php?id=<?= $project['id'] ?>"><?= e($project['title']) ?></a></h2>
-                        <p class="project-description"><?= e($project['description']) ?></p>
-                        <progress value="<?= $percentage ?>" max="100"></progress>
-                        <div class="project-card-stats">
-                            <strong>$<?= number_format((float) $project['current_amount'], 0) ?></strong>
-                            <span><?= round($percentage) ?>% funded</span>
-                        </div>
-                        <div class="project-card-meta">
-                            <span>By <?= e($project['user_name']) ?></span>
-                            <span><?= daysLeft($project['end_date']) ?> days left</span>
-                        </div>
+                    <p class="project-category">
+                        <?= htmlspecialchars($project['category_name']) ?>
+                    </p>
+
+                    <h2><?= htmlspecialchars($project['title']) ?></h2>
+
+                    <p class="project-creator">
+                        By <?= htmlspecialchars($project['user_name']) ?>
+                    </p>
+
+                    <p class="project-description">
+                        <?= htmlspecialchars($project['description']) ?>
+                    </p>
+
+                    <div class="project-funding">
+                        <strong>$<?= number_format($project['current_amount'], 2) ?></strong>
+                        <span>of $<?= number_format($project['goal_amount'], 2) ?> goal</span>
+                    </div>
+
+                    <progress value="<?= min($percentage, 100) ?>" max="100"></progress>
+
+                    <div class="project-info">
+                        <span><?= round($percentage) ?>% funded</span>
+                        <span>Ends <?= htmlspecialchars($project['end_date']) ?></span>
+                    </div>
+
+                    <div class="project-actions">
+                        <a href="project.php?id=<?= $project['id'] ?>">View</a>
+                        <a href="project-edit.php?id=<?= $project['id'] ?>">Edit</a>
+
+                        <form action="project-delete.php" method="post">
+                            <input type="hidden" name="id" value="<?= $project['id'] ?>">
+                            <button type="submit">Delete</button>
+                        </form>
                     </div>
                 </article>
+
             <?php endforeach; ?>
+
         </section>
+
     <?php else: ?>
+
         <div class="empty-state">
-            <h2>No projects found</h2>
-            <p>Try another search or category.</p>
+            <h2>No projects yet</h2>
+            <p>Be the first creator to launch a project.</p>
+            <a class="button button-dark" href="project-create.php">Start a project</a>
         </div>
+
     <?php endif; ?>
+
 </main>
 
 <?php require_once 'includes/footer.php'; ?>

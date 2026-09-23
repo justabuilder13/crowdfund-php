@@ -1,116 +1,94 @@
 <?php
 
-require_once 'includes/bootstrap.php';
+require_once 'Classe/Project.php';
+require_once 'Classe/User.php';
+require_once 'Classe/Category.php';
 
-$user = requireLogin();
-$categoryModel = new Category();
 $projectModel = new Project();
-$categories = $categoryModel->getAllCategories();
+$userModel = new User();
+$categoryModel = new Category();
 
+$users = $userModel->getAllUsers();
+$categories = $categoryModel->getAllCategories();
 $error = '';
-$title = '';
-$description = '';
-$goalAmount = '';
-$categoryId = 0;
-$startDate = date('Y-m-d');
-$endDate = date('Y-m-d', strtotime('+30 days'));
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $title = trim($_POST['title'] ?? '');
-    $description = trim($_POST['description'] ?? '');
-    $goalAmount = trim($_POST['goal_amount'] ?? '');
-    $categoryId = (int) ($_POST['category_id'] ?? 0);
     $startDate = $_POST['start_date'] ?? '';
     $endDate = $_POST['end_date'] ?? '';
 
-    if ($title === '' || $description === '') {
-        $error = 'Title and description are required.';
-    } elseif ($categoryId <= 0) {
-        $error = 'Please select a category.';
-    } elseif (!is_numeric($goalAmount) || (float) $goalAmount <= 0) {
-        $error = 'The funding goal must be greater than $0.';
-    } elseif (!$startDate || !$endDate || $endDate <= $startDate) {
+    // Validation simple : la date de fin doit être après la date de début.
+    if ($endDate < $startDate) {
         $error = 'The end date must be after the start date.';
     } else {
-        try {
-            $image = uploadImage($_FILES['image'] ?? [], 'projects');
+        $data = [
+            'user_id' => (int) $_POST['user_id'],
+            'category_id' => (int) $_POST['category_id'],
+            'title' => trim($_POST['title']),
+            'description' => trim($_POST['description']),
+            'goal_amount' => (float) $_POST['goal_amount'],
+            'current_amount' => 0,
+            'start_date' => $startDate,
+            'end_date' => $endDate,
+            'status' => 'active'
+        ];
 
-            $projectId = $projectModel->createProject([
-                'user_id' => (int) $user['id'],
-                'category_id' => $categoryId,
-                'title' => $title,
-                'description' => $description,
-                'image' => $image,
-                'goal_amount' => (float) $goalAmount,
-                'current_amount' => 0,
-                'start_date' => $startDate,
-                'end_date' => $endDate,
-                'status' => 'active'
-            ]);
+        $projectId = $projectModel->createProject($data);
 
-            flash('success', 'Your project has been created.');
-            redirect("project.php?id=$projectId");
-        } catch (RuntimeException $exception) {
-            $error = $exception->getMessage();
-        }
+        header("Location: project.php?id=$projectId");
+        exit;
     }
 }
 
-$pageTitle = 'Start a project';
 require_once 'includes/header.php';
 ?>
 
 <main class="container form-page">
     <div class="form-heading">
-        <p class="eyebrow">Create</p>
-        <h1>Start a project</h1>
-        <p>Tell people what you want to make, set a goal and launch your campaign.</p>
+                <h1>Start a project</h1>
+        <p>Enter the main information for your crowdfunding campaign.</p>
     </div>
 
-    <?php if ($error): ?>
-        <p class="form-error"><?= e($error) ?></p>
+    <?php if ($error !== ''): ?>
+        <p class="message error-message"><?= htmlspecialchars($error) ?></p>
     <?php endif; ?>
 
-    <form class="main-form" method="post" enctype="multipart/form-data">
-        <label for="title">Project title</label>
-        <input type="text" id="title" name="title" maxlength="150" value="<?= e($title) ?>" required>
-
-        <label for="category_id">Category</label>
-        <select id="category_id" name="category_id" required>
-            <option value="">Choose a category</option>
-            <?php foreach ($categories as $category): ?>
-                <option value="<?= $category['id'] ?>" <?= $categoryId === (int) $category['id'] ? 'selected' : '' ?>>
-                    <?= e($category['name']) ?>
+    <form class="main-form" method="post">
+        <label for="user_id">Creator</label>
+        <select name="user_id" id="user_id" required>
+            <?php foreach ($users as $user): ?>
+                <option value="<?= $user['id'] ?>">
+                    <?= htmlspecialchars($user['name']) ?>
                 </option>
             <?php endforeach; ?>
         </select>
 
+        <label for="category_id">Category</label>
+        <select name="category_id" id="category_id" required>
+            <?php foreach ($categories as $category): ?>
+                <option value="<?= $category['id'] ?>">
+                    <?= htmlspecialchars($category['name']) ?>
+                </option>
+            <?php endforeach; ?>
+        </select>
+
+        <label for="title">Project title</label>
+        <input type="text" id="title" name="title" maxlength="150" required>
+
         <label for="description">Description</label>
-        <textarea id="description" name="description" rows="8" required><?= e($description) ?></textarea>
+        <textarea id="description" name="description" required></textarea>
 
-        <label for="image">Project image</label>
-        <input type="file" id="image" name="image" accept="image/jpeg,image/png,image/webp">
-        <small>Optional. JPG, PNG or WebP, maximum 5 MB.</small>
+        <label for="goal_amount">Funding goal</label>
+        <input type="number" id="goal_amount" name="goal_amount" min="1" step="0.01" required>
 
-        <div class="form-grid-2">
-            <div>
-                <label for="goal_amount">Funding goal</label>
-                <input type="number" id="goal_amount" name="goal_amount" min="1" step="0.01" value="<?= e($goalAmount) ?>" required>
-            </div>
-            <div>
-                <label>Creator</label>
-                <input type="text" value="<?= e($user['name']) ?>" disabled>
-            </div>
-        </div>
-
-        <div class="form-grid-2">
+        <div class="form-row">
             <div>
                 <label for="start_date">Start date</label>
-                <input type="date" id="start_date" name="start_date" value="<?= e($startDate) ?>" required>
+                <input type="date" id="start_date" name="start_date" required>
             </div>
+
             <div>
                 <label for="end_date">End date</label>
-                <input type="date" id="end_date" name="end_date" value="<?= e($endDate) ?>" required>
+                <input type="date" id="end_date" name="end_date" required>
             </div>
         </div>
 
